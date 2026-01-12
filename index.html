@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kiosk</title>
+
+  <!-- 98.css for Windows 2000 styling -->
+  <link rel="stylesheet" href="https://unpkg.com/98.css@0.1.18/dist/98.css" />
+
+  <!-- Main application styles -->
+  <link rel="stylesheet" href="/src/styles/main.css" />
+</head>
+<body>
+  <!-- Desktop Container -->
+  <div id="desktop">
+    <!-- Taskbar at top (Windows 2000 style option) -->
+    <div id="taskbar" class="taskbar">
+      <button id="start-button" class="start-button">
+        <span class="start-icon"></span>
+        <span class="start-text">Start</span>
+      </button>
+
+      <div id="taskbar-programs" class="taskbar-programs">
+        <!-- Open windows will be listed here -->
+      </div>
+
+      <div id="system-tray" class="system-tray">
+        <div id="clock" class="clock">
+          <span id="clock-time">12:00 PM</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Menu (hidden by default) -->
+    <div id="start-menu" class="start-menu window" style="display: none;">
+      <div class="start-menu-sidebar">
+        <span class="sidebar-text">Windows 2000</span>
+      </div>
+      <div class="start-menu-content">
+        <ul class="start-menu-items">
+          <li class="menu-item" data-action="my-computer">
+            <span class="menu-icon icon-computer"></span>
+            <span class="menu-text">My Computer</span>
+          </li>
+          <li class="menu-item" data-action="my-documents">
+            <span class="menu-icon icon-folder"></span>
+            <span class="menu-text">My Documents</span>
+          </li>
+          <li class="menu-separator"></li>
+          <li class="menu-item" data-action="settings">
+            <span class="menu-icon icon-settings"></span>
+            <span class="menu-text">Settings</span>
+          </li>
+          <li class="menu-item" data-action="run">
+            <span class="menu-icon icon-run"></span>
+            <span class="menu-text">Run...</span>
+          </li>
+          <li class="menu-separator"></li>
+          <li class="menu-item" data-action="shutdown">
+            <span class="menu-icon icon-shutdown"></span>
+            <span class="menu-text">Shut Down...</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Desktop icons area -->
+    <div id="desktop-icons" class="desktop-icons">
+      <!-- Icons will be dynamically added -->
+    </div>
+
+    <!-- Windows container -->
+    <div id="windows-container" class="windows-container">
+      <!-- WinBox windows will be mounted here -->
+    </div>
+  </div>
+
+  <!-- Date/Time tooltip -->
+  <div id="datetime-tooltip" class="tooltip" style="display: none;">
+    <span id="tooltip-date"></span>
+  </div>
+
+  <!-- Application entry point -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
