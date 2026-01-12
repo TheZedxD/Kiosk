@@ -5,24 +5,37 @@
 
 import { Taskbar } from './Taskbar';
 import { WindowManager } from './WindowManager';
-import type { DesktopIcon, MenuAction, TaskbarItem } from '../types';
+import { AppRegistry } from './AppRegistry';
+import { coreApps } from '../apps/coreApps';
+import type { AppDefinition, DesktopIcon, StartMenuGroup, TaskbarItem } from '../types';
 
 export class Desktop {
   private taskbar: Taskbar;
   private windowManager: WindowManager;
+  private appRegistry: AppRegistry;
   private iconsContainer: HTMLElement | null;
   private desktopElement: HTMLElement | null;
+  private startMenuItems: HTMLElement | null;
 
   private icons: Map<string, DesktopIcon> = new Map();
   private selectedIcon: string | null = null;
 
+  private handleTaskbarClick?: (e: CustomEvent) => void;
+  private handleMenuActionEvent?: (e: CustomEvent) => void;
+  private handleCloseWindowEvent?: (e: CustomEvent) => void;
+  private handleDesktopClick?: (e: MouseEvent) => void;
+  private handleContextMenu?: (e: MouseEvent) => void;
+  private handleKeydown?: (e: KeyboardEvent) => void;
+
   constructor() {
     this.desktopElement = document.getElementById('desktop');
     this.iconsContainer = document.getElementById('desktop-icons');
+    this.startMenuItems = document.getElementById('start-menu-items');
 
     // Initialize components
     this.taskbar = new Taskbar();
     this.windowManager = new WindowManager();
+    this.appRegistry = new AppRegistry(this.windowManager);
 
     this.init();
   }
@@ -31,42 +44,76 @@ export class Desktop {
     this.setupWindowManagerEvents();
     this.setupDesktopEvents();
     this.setupMenuActions();
-    this.createDefaultIcons();
+    this.registerCoreApps();
+    this.renderStartMenu();
+    this.createDesktopIcons();
   }
 
   // ============================================================================
-  // Default Desktop Icons
+  // Application Registration
   // ============================================================================
 
-  private createDefaultIcons(): void {
-    // Add default desktop icons
-    // TODO: Replace with actual icon images
-    this.addIcon({
-      id: 'my-computer',
-      label: 'My Computer',
-      icon: 'computer',
-      action: 'my-computer',
+  private registerCoreApps(): void {
+    this.appRegistry.registerAll(coreApps);
+  }
+
+  private renderStartMenu(): void {
+    if (!this.startMenuItems) return;
+
+    this.startMenuItems.innerHTML = '';
+
+    const apps = this.appRegistry.getStartMenuApps();
+    const grouped = new Map<string, AppDefinition[]>();
+
+    apps.forEach((app) => {
+      const group = app.startMenuGroup || 'primary';
+      if (!grouped.has(group)) {
+        grouped.set(group, []);
+      }
+      grouped.get(group)?.push(app);
     });
 
-    this.addIcon({
-      id: 'my-documents',
-      label: 'My Documents',
-      icon: 'folder',
-      action: 'my-documents',
-    });
+    const groupOrder: StartMenuGroup[] = ['primary', 'secondary', 'power'];
+    let firstGroupRendered = false;
 
-    this.addIcon({
-      id: 'recycle-bin',
-      label: 'Recycle Bin',
-      icon: 'trash',
-      action: 'recycle-bin',
-    });
+    groupOrder.forEach((group) => {
+      const groupApps = grouped.get(group) ?? [];
+      if (groupApps.length === 0) return;
 
-    // TODO: Add more default icons as features are implemented
-    // - Network Neighborhood
-    // - Internet Explorer
-    // - Notepad
-    // - Command Prompt
+      if (firstGroupRendered) {
+        const separator = document.createElement('li');
+        separator.className = 'menu-separator';
+        this.startMenuItems?.appendChild(separator);
+      }
+
+      groupApps.forEach((app) => {
+        this.startMenuItems?.appendChild(this.createMenuItem(app));
+      });
+
+      firstGroupRendered = true;
+    });
+  }
+
+  private createMenuItem(app: AppDefinition): HTMLElement {
+    const item = document.createElement('li');
+    item.className = 'menu-item';
+    item.dataset.action = app.id;
+    item.innerHTML = `
+      <span class="menu-icon icon-${app.icon}"></span>
+      <span class="menu-text">${this.escapeHtml(app.title)}</span>
+    `;
+    return item;
+  }
+
+  private createDesktopIcons(): void {
+    this.appRegistry.getDesktopApps().forEach((app) => {
+      this.addIcon({
+        id: app.id,
+        label: app.title,
+        icon: app.icon,
+        action: app.id,
+      });
+    });
   }
 
   // ============================================================================
@@ -135,7 +182,7 @@ export class Desktop {
   private activateIcon(id: string): void {
     const icon = this.icons.get(id);
     if (icon) {
-      this.handleMenuAction(icon.action as MenuAction);
+      void this.handleMenuAction(icon.action);
     }
   }
 
@@ -173,15 +220,16 @@ export class Desktop {
       this.taskbar.setActiveProgram(event.windowId, false);
     };
 
-    // Handle taskbar click events
-    document.addEventListener('taskbar-click', ((e: CustomEvent) => {
+    this.handleTaskbarClick = (e: CustomEvent) => {
       const { windowId } = e.detail;
 
       if (this.windowManager.isMinimized(windowId)) {
         this.windowManager.restoreWindow(windowId);
       }
       this.windowManager.focusWindow(windowId);
-    }) as EventListener);
+    };
+
+    document.addEventListener('taskbar-click', this.handleTaskbarClick as EventListener);
   }
 
   // ============================================================================
@@ -190,23 +238,26 @@ export class Desktop {
 
   private setupDesktopEvents(): void {
     // Click on desktop to deselect icons
-    this.iconsContainer?.addEventListener('click', (e) => {
+    this.handleDesktopClick = (e: MouseEvent) => {
       if (e.target === this.iconsContainer) {
         this.deselectAllIcons();
       }
-    });
+    };
+
+    this.iconsContainer?.addEventListener('click', this.handleDesktopClick);
 
     // Right-click context menu (TODO: implement)
-    this.desktopElement?.addEventListener('contextmenu', (e) => {
+    this.handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       // TODO: Show desktop context menu
       console.log('Desktop context menu at', e.clientX, e.clientY);
-    });
+    };
+
+    this.desktopElement?.addEventListener('contextmenu', this.handleContextMenu);
 
     // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      this.handleKeyboard(e);
-    });
+    this.handleKeydown = (e: KeyboardEvent) => this.handleKeyboard(e);
+    document.addEventListener('keydown', this.handleKeydown);
   }
 
   private handleKeyboard(e: KeyboardEvent): void {
@@ -238,210 +289,26 @@ export class Desktop {
   // ============================================================================
 
   private setupMenuActions(): void {
-    document.addEventListener('menu-action', ((e: CustomEvent) => {
-      this.handleMenuAction(e.detail.action as MenuAction);
-    }) as EventListener);
+    this.handleMenuActionEvent = (e: CustomEvent) => {
+      void this.handleMenuAction(e.detail.action);
+    };
+
+    this.handleCloseWindowEvent = (e: CustomEvent) => {
+      const { id } = e.detail || {};
+      if (typeof id === 'string') {
+        this.windowManager.closeWindow(id);
+      }
+    };
+
+    document.addEventListener('menu-action', this.handleMenuActionEvent as EventListener);
+    document.addEventListener('close-window', this.handleCloseWindowEvent as EventListener);
   }
 
-  private handleMenuAction(action: MenuAction | string): void {
-    switch (action) {
-      case 'my-computer':
-        this.openMyComputer();
-        break;
-
-      case 'my-documents':
-        this.openMyDocuments();
-        break;
-
-      case 'settings':
-        this.openSettings();
-        break;
-
-      case 'run':
-        this.openRunDialog();
-        break;
-
-      case 'shutdown':
-        this.showShutdownDialog();
-        break;
-
-      case 'recycle-bin':
-        this.openRecycleBin();
-        break;
-
-      default:
-        console.log('Unknown action:', action);
+  private async handleMenuAction(action: string): Promise<void> {
+    const launched = await this.appRegistry.launch(action);
+    if (!launched) {
+      console.log('Unknown action:', action);
     }
-  }
-
-  // ============================================================================
-  // Window Openers
-  // ============================================================================
-
-  private openMyComputer(): void {
-    const content = document.createElement('div');
-    content.className = 'window-content file-browser';
-    content.innerHTML = `
-      <div class="window-toolbar">
-        <button class="button">Back</button>
-        <button class="button">Forward</button>
-        <button class="button">Up</button>
-      </div>
-      <div class="window-address-bar">
-        <label>Address:</label>
-        <input type="text" value="My Computer" readonly />
-      </div>
-      <div class="window-body" style="background: white; padding: 8px;">
-        <p style="color: #808080; font-style: italic;">
-          <!-- TODO: Display drives here -->
-          File browser coming in Phase 2...
-        </p>
-      </div>
-    `;
-
-    this.windowManager.createWindow({
-      id: 'my-computer',
-      title: 'My Computer',
-      width: 600,
-      height: 400,
-      content,
-    });
-  }
-
-  private openMyDocuments(): void {
-    const content = document.createElement('div');
-    content.className = 'window-content file-browser';
-    content.innerHTML = `
-      <div class="window-toolbar">
-        <button class="button">Back</button>
-        <button class="button">Forward</button>
-        <button class="button">Up</button>
-      </div>
-      <div class="window-address-bar">
-        <label>Address:</label>
-        <input type="text" value="My Documents" readonly />
-      </div>
-      <div class="window-body" style="background: white; padding: 8px;">
-        <p style="color: #808080; font-style: italic;">
-          <!-- TODO: Display files here -->
-          File browser coming in Phase 2...
-        </p>
-      </div>
-    `;
-
-    this.windowManager.createWindow({
-      id: 'my-documents',
-      title: 'My Documents',
-      width: 600,
-      height: 400,
-      content,
-    });
-  }
-
-  private openSettings(): void {
-    const content = document.createElement('div');
-    content.className = 'window-content settings-panel';
-    content.innerHTML = `
-      <div style="padding: 16px;">
-        <fieldset>
-          <legend>Display Settings</legend>
-          <p style="color: #808080; font-style: italic;">
-            <!-- TODO: Add settings controls -->
-            Settings panel coming in Phase 2...
-          </p>
-        </fieldset>
-      </div>
-    `;
-
-    this.windowManager.createWindow({
-      id: 'settings',
-      title: 'Settings',
-      width: 400,
-      height: 300,
-      content,
-    });
-  }
-
-  private openRunDialog(): void {
-    const content = document.createElement('div');
-    content.className = 'window-content run-dialog';
-    content.innerHTML = `
-      <div style="padding: 16px;">
-        <p>Type the name of a program, folder, document, or Internet resource, and Windows will open it for you.</p>
-        <div style="margin-top: 16px;">
-          <label for="run-input">Open:</label>
-          <input type="text" id="run-input" style="width: 100%; margin-top: 4px;" />
-        </div>
-        <div style="margin-top: 16px; text-align: right;">
-          <button class="button" style="min-width: 75px;">OK</button>
-          <button class="button" style="min-width: 75px; margin-left: 8px;">Cancel</button>
-          <button class="button" style="min-width: 75px; margin-left: 8px;">Browse...</button>
-        </div>
-      </div>
-    `;
-
-    this.windowManager.createWindow({
-      id: 'run-dialog',
-      title: 'Run',
-      width: 400,
-      height: 180,
-      resizable: false,
-      content,
-    });
-  }
-
-  private openRecycleBin(): void {
-    const content = document.createElement('div');
-    content.innerHTML = `
-      <div style="padding: 16px; background: white; height: 100%;">
-        <p style="color: #808080; font-style: italic; text-align: center; margin-top: 40px;">
-          Recycle Bin is empty
-        </p>
-      </div>
-    `;
-
-    this.windowManager.createWindow({
-      id: 'recycle-bin',
-      title: 'Recycle Bin',
-      width: 500,
-      height: 350,
-      content,
-    });
-  }
-
-  private showShutdownDialog(): void {
-    const content = document.createElement('div');
-    content.className = 'window-content shutdown-dialog';
-    content.innerHTML = `
-      <div style="padding: 16px; text-align: center;">
-        <p style="margin-bottom: 16px;">What do you want the computer to do?</p>
-        <select style="width: 200px; margin-bottom: 16px;">
-          <option>Shut down</option>
-          <option>Restart</option>
-          <option>Log off</option>
-        </select>
-        <div style="margin-top: 16px;">
-          <button class="button" style="min-width: 75px;">OK</button>
-          <button class="button" style="min-width: 75px; margin-left: 8px;"
-                  onclick="document.dispatchEvent(new CustomEvent('close-window', {detail: {id: 'shutdown-dialog'}}))">
-            Cancel
-          </button>
-        </div>
-        <p style="margin-top: 16px; color: #808080; font-size: 10px;">
-          (This is a demo - shutdown is not implemented)
-        </p>
-      </div>
-    `;
-
-    this.windowManager.createWindow({
-      id: 'shutdown-dialog',
-      title: 'Shut Down Windows',
-      width: 300,
-      height: 220,
-      resizable: false,
-      modal: true,
-      content,
-    });
   }
 
   // ============================================================================
@@ -478,6 +345,30 @@ export class Desktop {
   public destroy(): void {
     this.taskbar.destroy();
     this.windowManager.destroy();
+
+    if (this.handleTaskbarClick) {
+      document.removeEventListener('taskbar-click', this.handleTaskbarClick as EventListener);
+    }
+
+    if (this.handleMenuActionEvent) {
+      document.removeEventListener('menu-action', this.handleMenuActionEvent as EventListener);
+    }
+
+    if (this.handleCloseWindowEvent) {
+      document.removeEventListener('close-window', this.handleCloseWindowEvent as EventListener);
+    }
+
+    if (this.iconsContainer && this.handleDesktopClick) {
+      this.iconsContainer.removeEventListener('click', this.handleDesktopClick);
+    }
+
+    if (this.desktopElement && this.handleContextMenu) {
+      this.desktopElement.removeEventListener('contextmenu', this.handleContextMenu);
+    }
+
+    if (this.handleKeydown) {
+      document.removeEventListener('keydown', this.handleKeydown);
+    }
   }
 }
 

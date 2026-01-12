@@ -4,7 +4,9 @@
 //! It handles system information, file operations, and other native functionality.
 
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use sysinfo::System;
+use tauri::State;
 use chrono::{Local, Datelike, Timelike};
 
 // ============================================================================
@@ -54,14 +56,17 @@ pub struct DriveInfo {
     pub is_removable: bool,
 }
 
+/// Shared system state to avoid repeated allocations.
+pub struct SharedSystem(Mutex<System>);
+
 // ============================================================================
 // Tauri Commands
 // ============================================================================
 
 /// Get current system statistics (CPU, memory usage)
 #[tauri::command]
-fn get_system_stats() -> SystemStats {
-    let mut sys = System::new_all();
+fn get_system_stats(state: State<'_, SharedSystem>) -> SystemStats {
+    let mut sys = state.0.lock().expect("system state lock");
     sys.refresh_all();
 
     SystemStats {
@@ -75,14 +80,15 @@ fn get_system_stats() -> SystemStats {
 
 /// Get hardware profile information
 #[tauri::command]
-fn get_hardware_profile() -> HardwareProfile {
+fn get_hardware_profile(state: State<'_, SharedSystem>) -> HardwareProfile {
     // Try to read Pi model from device tree (Linux-specific)
     let model = std::fs::read_to_string("/sys/firmware/devicetree/base/model")
         .unwrap_or_else(|_| "Desktop Computer".to_string())
         .trim_matches('\0')
         .to_string();
 
-    let sys = System::new_all();
+    let mut sys = state.0.lock().expect("system state lock");
+    sys.refresh_memory();
 
     HardwareProfile {
         model,
@@ -110,10 +116,12 @@ fn get_datetime() -> DateTimeInfo {
 
 /// List available drives/disks
 #[tauri::command]
-fn list_drives() -> Vec<DriveInfo> {
-    let sys = System::new_all();
+fn list_drives(state: State<'_, SharedSystem>) -> Vec<DriveInfo> {
+    let mut sys = state.0.lock().expect("system state lock");
+    sys.refresh_disks_list();
+    sys.refresh_disks();
 
-    sysinfo::Disks::new_with_refreshed_list()
+    sys.disks()
         .iter()
         .map(|disk| DriveInfo {
             name: disk.name().to_string_lossy().to_string(),
@@ -158,6 +166,7 @@ fn greet(name: &str) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(SharedSystem(Mutex::new(System::new_all())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![

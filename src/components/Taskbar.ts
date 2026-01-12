@@ -3,7 +3,7 @@
  * Windows 2000 style taskbar with Start button, programs, and system tray
  */
 
-import { getDateTime, getLocalDateTime, isTauri } from '../utils/api';
+import { getLocalDateTime } from '../utils/api';
 import type { DateTimeInfo, TaskbarItem } from '../types';
 
 export class Taskbar {
@@ -13,11 +13,19 @@ export class Taskbar {
   private tooltipDateElement: HTMLElement | null;
   private startButton: HTMLElement | null;
   private startMenu: HTMLElement | null;
+  private startMenuItems: HTMLElement | null;
   private programsContainer: HTMLElement | null;
 
   private clockInterval: number | null = null;
   private isStartMenuOpen: boolean = false;
   private taskbarItems: Map<string, TaskbarItem> = new Map();
+
+  private handleStartButtonClick?: (e: MouseEvent) => void;
+  private handleMenuClick?: (e: MouseEvent) => void;
+  private handleClickOutside?: (e: MouseEvent) => void;
+  private handleClockEnter?: (e: MouseEvent) => void;
+  private handleClockMove?: (e: MouseEvent) => void;
+  private handleClockLeave?: () => void;
 
   constructor() {
     this.clockElement = document.getElementById('clock');
@@ -26,6 +34,7 @@ export class Taskbar {
     this.tooltipDateElement = document.getElementById('tooltip-date');
     this.startButton = document.getElementById('start-button');
     this.startMenu = document.getElementById('start-menu');
+    this.startMenuItems = document.getElementById('start-menu-items');
     this.programsContainer = document.getElementById('taskbar-programs');
 
     this.init();
@@ -52,16 +61,9 @@ export class Taskbar {
     }, 1000);
   }
 
-  private async updateClock(): Promise<void> {
-    let dateTime: DateTimeInfo;
-
+  private updateClock(): void {
     try {
-      if (isTauri()) {
-        dateTime = await getDateTime();
-      } else {
-        // Fallback for browser-only testing
-        dateTime = getLocalDateTime();
-      }
+      const dateTime: DateTimeInfo = getLocalDateTime();
 
       if (this.clockTimeElement) {
         this.clockTimeElement.textContent = dateTime.time_12h;
@@ -83,22 +85,24 @@ export class Taskbar {
   private setupClockTooltip(): void {
     if (!this.clockElement || !this.tooltipElement) return;
 
-    this.clockElement.addEventListener('mouseenter', (e) => {
+    this.handleClockEnter = (e: MouseEvent) => {
       if (this.tooltipElement) {
         this.tooltipElement.style.display = 'block';
         this.positionTooltip(e);
       }
-    });
+    };
 
-    this.clockElement.addEventListener('mousemove', (e) => {
-      this.positionTooltip(e);
-    });
+    this.handleClockMove = (e: MouseEvent) => this.positionTooltip(e);
 
-    this.clockElement.addEventListener('mouseleave', () => {
+    this.handleClockLeave = () => {
       if (this.tooltipElement) {
         this.tooltipElement.style.display = 'none';
       }
-    });
+    };
+
+    this.clockElement.addEventListener('mouseenter', this.handleClockEnter);
+    this.clockElement.addEventListener('mousemove', this.handleClockMove);
+    this.clockElement.addEventListener('mouseleave', this.handleClockLeave);
   }
 
   private positionTooltip(e: MouseEvent): void {
@@ -123,26 +127,30 @@ export class Taskbar {
   private setupStartButton(): void {
     if (!this.startButton) return;
 
-    this.startButton.addEventListener('click', (e) => {
+    this.handleStartButtonClick = (e: MouseEvent) => {
       e.stopPropagation();
       this.toggleStartMenu();
-    });
+    };
 
-    // Setup menu item handlers
-    const menuItems = document.querySelectorAll('.menu-item[data-action]');
-    menuItems.forEach((item) => {
-      item.addEventListener('click', (e) => {
-        const action = (e.currentTarget as HTMLElement).dataset.action;
+    this.startButton.addEventListener('click', this.handleStartButtonClick);
+
+    if (this.startMenuItems) {
+      this.handleMenuClick = (e: MouseEvent) => {
+        const target = (e.target as HTMLElement).closest('.menu-item[data-action]') as HTMLElement | null;
+        if (!target) return;
+        const action = target.dataset.action;
         if (action) {
           this.handleMenuAction(action);
         }
         this.closeStartMenu();
-      });
-    });
+      };
+
+      this.startMenuItems.addEventListener('click', this.handleMenuClick);
+    }
   }
 
   private setupClickOutside(): void {
-    document.addEventListener('click', (e) => {
+    this.handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
       // Close start menu if clicking outside
@@ -151,7 +159,9 @@ export class Taskbar {
           !this.startMenu?.contains(target)) {
         this.closeStartMenu();
       }
-    });
+    };
+
+    document.addEventListener('click', this.handleClickOutside);
   }
 
   public toggleStartMenu(): void {
@@ -290,6 +300,30 @@ export class Taskbar {
     if (this.clockInterval) {
       clearInterval(this.clockInterval);
       this.clockInterval = null;
+    }
+
+    if (this.startButton && this.handleStartButtonClick) {
+      this.startButton.removeEventListener('click', this.handleStartButtonClick);
+    }
+
+    if (this.startMenuItems && this.handleMenuClick) {
+      this.startMenuItems.removeEventListener('click', this.handleMenuClick);
+    }
+
+    if (this.handleClickOutside) {
+      document.removeEventListener('click', this.handleClickOutside);
+    }
+
+    if (this.clockElement) {
+      if (this.handleClockEnter) {
+        this.clockElement.removeEventListener('mouseenter', this.handleClockEnter);
+      }
+      if (this.handleClockMove) {
+        this.clockElement.removeEventListener('mousemove', this.handleClockMove);
+      }
+      if (this.handleClockLeave) {
+        this.clockElement.removeEventListener('mouseleave', this.handleClockLeave);
+      }
     }
   }
 }
