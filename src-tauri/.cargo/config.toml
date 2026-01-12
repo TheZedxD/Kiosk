@@ -1,0 +1,22 @@
+# Cargo configuration for Kiosk
+# See: https://doc.rust-lang.org/cargo/reference/config.html
+
+# Cross-compilation target for Raspberry Pi (ARM64)
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+
+# Optimizations for release builds
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
+strip = true
+panic = "abort"
+
+# Development profile - faster compilation
+[profile.dev]
+opt-level = 0
+
+# TODO: Add more cross-compilation targets as needed
+# [target.armv7-unknown-linux-gnueabihf]  # Pi Zero 2W 32-bit
+# linker = "arm-linux-gnueabihf-gcc"
