@@ -47,6 +47,11 @@
   box-sizing: border-box;
 }
 
+* {
+  animation: none !important;
+  transition: none !important;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -309,6 +314,7 @@ html, body {
 .icon-settings { background-color: #808080; border: 1px solid #404040; }
 .icon-run { background-color: #ffffff; border: 1px solid #808080; }
 .icon-shutdown { background-color: #ff0000; border: 1px solid #800000; }
+.icon-trash { background-color: #ffffff; border: 1px solid #808080; }
 
 .menu-separator {
   height: 1px;
@@ -428,25 +434,6 @@ html, body {
   clip: rect(0, 0, 0, 0) !important;
   white-space: nowrap !important;
   border: 0 !important;
-}
-
-/* ============================================================================
-   Performance Optimizations
-   ============================================================================ */
-
-/* Use GPU acceleration for animations */
-.gpu-accelerated {
-  transform: translateZ(0);
-  will-change: transform, opacity;
-}
-
-/* Contain layout for better performance */
-.contain-layout {
-  contain: layout;
-}
-
-.contain-content {
-  contain: content;
 }
 
 /* ============================================================================

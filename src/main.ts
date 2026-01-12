@@ -6,7 +6,7 @@
  */
 
 import { Desktop } from './components/Desktop';
-import { isTauri, getHardwareProfile, getSystemStats } from './utils/api';
+import { isTauri } from './utils/api';
 
 // Import WinBox CSS
 import 'winbox/dist/css/winbox.min.css';
@@ -42,10 +42,7 @@ async function init(): Promise<void> {
 
     console.log('Kiosk: Desktop initialized');
 
-    // Log system info if running in Tauri
-    if (isTauri()) {
-      await logSystemInfo();
-    } else {
+    if (!isTauri()) {
       console.log('Kiosk: Running in browser mode (no Tauri backend)');
     }
 
@@ -55,27 +52,6 @@ async function init(): Promise<void> {
   } catch (error) {
     console.error('Kiosk: Initialization failed:', error);
     showErrorScreen(error as Error);
-  }
-}
-
-/**
- * Log system information on startup
- */
-async function logSystemInfo(): Promise<void> {
-  try {
-    const profile = await getHardwareProfile();
-    const stats = await getSystemStats();
-
-    console.log('Kiosk: System Information');
-    console.log(`  Model: ${profile.model}`);
-    console.log(`  OS: ${profile.os_name} ${profile.os_version}`);
-    console.log(`  Hostname: ${profile.hostname}`);
-    console.log(`  RAM: ${profile.ram_mb} MB`);
-    console.log(`  CPU Usage: ${stats.cpu_usage.toFixed(1)}%`);
-    console.log(`  Memory Used: ${Math.round(stats.used_memory / 1024 / 1024)} MB`);
-
-  } catch (error) {
-    console.warn('Kiosk: Could not fetch system info:', error);
   }
 }
 

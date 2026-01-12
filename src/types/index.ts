@@ -80,6 +80,21 @@ export interface TaskbarItem {
 }
 
 // ============================================================================
+// Application Types
+// ============================================================================
+
+export type StartMenuGroup = 'primary' | 'secondary' | 'power';
+
+export interface AppDefinition {
+  id: string;
+  title: string;
+  icon: string;
+  startMenuGroup?: StartMenuGroup;
+  showOnDesktop: boolean;
+  launch: () => WindowConfig | Promise<WindowConfig>;
+}
+
+// ============================================================================
 // Event Types
 // ============================================================================
 
@@ -91,7 +106,7 @@ export interface WindowEvent {
   timestamp: number;
 }
 
-export type MenuAction = 'my-computer' | 'my-documents' | 'settings' | 'run' | 'shutdown';
+export type MenuAction = string;
 
 // ============================================================================
 // TODO: Future Types
